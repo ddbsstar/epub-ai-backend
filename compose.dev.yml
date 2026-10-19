@@ -1,0 +1,51 @@
+name: epub-ai-dev
+
+services:
+  mysql:
+    image: mysql:8.4.11
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in the untracked .env}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in the untracked .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in the untracked .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in the untracked .env}
+    ports:
+      - '127.0.0.1:3307:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          test "$$(MYSQL_PWD="$${MYSQL_PASSWORD}" mysql
+          --protocol=TCP --host=127.0.0.1 --user="$${MYSQL_USER}"
+          --database="$${MYSQL_DATABASE}" --execute='SELECT 1'
+          --silent --skip-column-names)" = 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+  redis:
+    image: redis:8.2.10-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in the untracked .env}
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "$${REDIS_PASSWORD}"
+    ports:
+      - '127.0.0.1:6380:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test "$$(REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli --no-auth-warning ping)" = PONG
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  mysql-data:
+  redis-data:

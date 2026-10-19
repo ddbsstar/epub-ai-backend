@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: Code checks without external services
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      DATABASE_ENABLED: 'false'
+      REDIS_ENABLED: 'false'
+      QUEUE_ENABLED: 'false'
+      QWEN_ENABLED: 'false'
+      SWAGGER_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run prisma:generate
+      - run: npm run db:validate
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  infrastructure:
+    name: MySQL and Redis integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      MYSQL_DATABASE: epub_ci
+      MYSQL_USER: epub_ci
+      # Isolated, disposable CI values; never production or repository secrets.
+      MYSQL_PASSWORD: ci-only-mysql-password
+      MYSQL_ROOT_PASSWORD: ci-only-mysql-root-password
+      REDIS_PASSWORD: ci-only-redis-password
+      DATABASE_ENABLED: 'true'
+      DATABASE_URL: mysql://epub_ci:ci-only-mysql-password@127.0.0.1:3307/epub_ci
+      REDIS_ENABLED: 'true'
+      REDIS_URL: redis://:ci-only-redis-password@127.0.0.1:6380
+      QUEUE_ENABLED: 'true'
+      QUEUE_PREFIX: epub-ai-ci
+      QWEN_ENABLED: 'false'
+      SWAGGER_ENABLED: 'false'
+      RUN_INFRA_INTEGRATION: 'true'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run prisma:generate
+      - name: Validate dependency configuration without printing credentials
+        run: docker compose --env-file /dev/null -p epub-ai-ci -f compose.dev.yml config --quiet
+      - name: Start isolated dependencies
+        run: docker compose --env-file /dev/null -p epub-ai-ci -f compose.dev.yml up --detach --wait --wait-timeout 120
+      - run: npm run db:migrate:deploy
+      - run: npm run test:integration
+      - name: Dependency logs
+        if: failure()
+        run: docker compose --env-file /dev/null -p epub-ai-ci -f compose.dev.yml logs --no-color
+      - name: Stop CI dependencies
+        if: always()
+        run: docker compose --env-file /dev/null -p epub-ai-ci -f compose.dev.yml down --remove-orphans
+
+  container:
+    name: Container build and smoke test
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build production and migration images
+        run: |
+          docker build --pull --target runtime --tag epub-ai-backend:ci .
+          docker build --target migration --tag epub-ai-backend:migration-ci .
+      - name: Start with optional dependencies disabled
+        run: |
+          test "$(docker image inspect --format '{{.Config.User}}' epub-ai-backend:ci)" = node
+          docker run --detach --name epub-ai-backend-ci \
+            --publish 127.0.0.1:18000:3000 \
+            --read-only --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            epub-ai-backend:ci
+      - name: Check production health and API documentation boundary
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 1 \
+            http://127.0.0.1:18000/api/health \
+            | jq --exit-status '.data.status == "ok" and .data.service == "epub-ai-backend" and (.meta.requestId | type == "string")'
+          curl --fail --silent --show-error http://127.0.0.1:18000/api/health/ready \
+            | jq --exit-status '.data.status == "ready" and (.meta.requestId | type == "string")'
+          docs_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:18000/api/docs)
+          test "$docs_status" = 404
+      - name: Container logs
+        if: failure()
+        run: docker logs epub-ai-backend-ci
+      - name: Stop smoke-test container
+        if: always()
+        run: docker rm --force epub-ai-backend-ci 2>/dev/null || true

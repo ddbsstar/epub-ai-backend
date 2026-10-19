@@ -6,5 +6,6 @@ export default defineConfig({
     globals: true,
     root: './',
     include: ['**/*.e2e-spec.ts'],
+    env: { NODE_ENV: 'test', LOG_LEVEL: 'silent' },
   },
 });

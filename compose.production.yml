@@ -1,0 +1,44 @@
+# Assumes sibling checkouts named backend/ and frontend/; see docs/deployment.md.
+name: epub-ai
+
+services:
+  backend:
+    image: epub-ai-backend:local
+    build:
+      context: .
+      target: runtime
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: '3000'
+      SWAGGER_ENABLED: 'false'
+    expose:
+      - '3000'
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  frontend:
+    image: epub-ai-frontend:local
+    build:
+      context: ../frontend
+      target: runtime
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8080:8080'
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

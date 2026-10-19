@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24.19.0-bookworm-slim AS base
+FROM node:26.12.0-bookworm-slim AS base
 WORKDIR /app
 # Prisma CLI uses OpenSSL during generation; CA roots are also needed for TLS.
 RUN apt-get update \

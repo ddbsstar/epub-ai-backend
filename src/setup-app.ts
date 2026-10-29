@@ -39,7 +39,7 @@ export function configureApp(app: NestExpressApplication): void {
       new DocumentBuilder()
         .setTitle('EPUB AI API')
         .setDescription(
-          '基础设施接口。业务、鉴权与 EPUB 处理尚未实现。API 成功和失败响应均包含 meta.requestId，响应头同步返回 x-request-id。',
+          '基础设施与本机 EPUB 业务接口。书籍处理默认关闭，正式账号尚未接入。JSON 响应包含 meta.requestId，二进制下载使用文件流；响应头包含 x-request-id。',
         )
         .setVersion('0.1.0')
         .build(),

@@ -18,3 +18,61 @@ model BackgroundJob {
   @@index([status, createdAt])
   @@map("background_jobs")
 }
+
+// Phase A: bounded run aggregates (maximum 16 steps), no book text in MySQL.
+model ProcessingBook {
+  id        String    @id @db.Char(36)
+  ownerId   String    @db.VarChar(100)
+  record    Json
+  createdAt DateTime  @db.DateTime(3)
+  deletedAt DateTime? @db.DateTime(3)
+
+  @@index([ownerId, createdAt])
+  @@map("processing_books")
+}
+
+model ProcessingRun {
+  id             String   @id @db.Char(36)
+  ownerId        String   @db.VarChar(100)
+  bookId         String   @db.Char(36)
+  operation      String   @db.VarChar(64)
+  idempotencyKey String   @db.VarChar(100)
+  status         String   @db.VarChar(24)
+  record         Json
+  createdAt      DateTime @db.DateTime(3)
+  updatedAt      DateTime @db.DateTime(3)
+
+  @@unique([ownerId, operation, idempotencyKey])
+  @@index([ownerId, status])
+  @@index([status, updatedAt])
+  @@index([bookId])
+  @@map("processing_runs")
+}
+
+model ProcessingArtifact {
+  id        String   @id @db.Char(36)
+  ownerId   String   @db.VarChar(100)
+  runId     String   @db.Char(36)
+  bookId    String   @db.Char(36)
+  record    Json
+  createdAt DateTime @db.DateTime(3)
+
+  @@index([runId])
+  @@index([ownerId, createdAt])
+  @@map("processing_artifacts")
+}
+
+// A short admission transaction serializes cross-run capacity checks.
+model ProcessingAdmissionLock {
+  id String @id @db.VarChar(24)
+
+  @@map("processing_admission_locks")
+}
+
+// UTC day aggregates are changed with the run under the global admission lock.
+model ProcessingModelDailyBudget {
+  day    String @id @db.Char(10)
+  record Json
+
+  @@map("processing_model_daily_budgets")
+}

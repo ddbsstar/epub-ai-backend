@@ -14,7 +14,7 @@ npm run start:dev
 
 Windows PowerShell 可用 `Copy-Item .env.example .env`；若已存在 `.env`，先保留自己的配置。默认后端监听 `127.0.0.1:3000`。`DATABASE_ENABLED`、`REDIS_ENABLED`、`QUEUE_ENABLED`、`QWEN_ENABLED` 为 `false` 时不要求相应的真实服务或凭据。
 
-`GET /api/health` 的成功响应为 `{ data, meta }`：`data` 包含进程与依赖状态，`meta.requestId` 用于排查请求。数据库启用时执行连接检查；Redis、队列报告连接状态；千问只报告配置状态，不发起付费调用。EPUB 排版业务尚未实现。
+`GET /api/health` 的成功响应为 `{ data, meta }`：`data` 包含进程与依赖状态，`meta.requestId` 用于排查请求。数据库启用时执行连接检查；Redis、队列报告连接状态；千问只报告配置状态，不发起付费调用。EPUB 业务默认关闭，本机上传/处理/下载的独立 API、Worker 启动与当前限制见 [业务实现说明](processing-phase-a.md)。现有生产 Compose 仍只提供基础 API 与前端，不代表已完成 Worker/校验工具/账号的生产集成。
 
 容器健康检查使用 `GET /api/health/ready`：默认关闭的依赖不影响就绪；已启用的基础设施不可用时返回 `503`。该接口同样不执行付费模型调用。
 
@@ -116,11 +116,11 @@ docker run --rm --env-file .env epub-ai-backend:migration
 
 ```text
 deployment/
-  backend/   # ddbsstar/epub-ai-backend
-  frontend/  # ddbsstar/epub-ai-frontend
+  epub-ai-backend/   # ddbsstar/epub-ai-backend
+  epub-ai-frontend/  # ddbsstar/epub-ai-frontend
 ```
 
-前端 `build.context` 为 `../frontend`；目录名不同时需明确修改。两个上下文各自使用允许清单，不能使用包含 `work/` 或凭据的父工作区。
+前端 `build.context` 为 `../epub-ai-frontend`；目录名不同时需明确修改。两个上下文各自使用允许清单，不能使用包含 `work/` 或凭据的父工作区。
 
 生产 Compose 只提供 API 与前端，不自动带上开发用 MySQL、Redis。外部依赖需要先在确认资源与网络后的运行环境中准备。把后端运行环境设置为可从容器访问的数据库／Redis 地址后，在后端目录执行：
 

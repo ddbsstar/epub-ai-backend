@@ -1,4 +1,4 @@
-# Assumes sibling checkouts named backend/ and frontend/; see docs/deployment.md.
+# Assumes sibling checkouts named epub-ai-backend/ and epub-ai-frontend/; see docs/deployment.md.
 name: epub-ai
 
 services:
@@ -27,7 +27,7 @@ services:
   frontend:
     image: epub-ai-frontend:local
     build:
-      context: ../frontend
+      context: ../epub-ai-frontend
       target: runtime
     depends_on:
       backend:

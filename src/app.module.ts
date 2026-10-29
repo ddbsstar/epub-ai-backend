@@ -10,6 +10,7 @@ import { ResponseInterceptor } from './common/http/response.interceptor.js';
 import { DatabaseModule } from './database/database.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { BusinessModule } from './business/business.module.js';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { AiModule } from './ai/ai.module.js';
     DatabaseModule,
     QueueModule,
     AiModule,
+    BusinessModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -1,4 +1,14 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { validateEnvironment } from '../src/config/environment.js';
+
+// Configuration validation does not read these files. Use native absolute paths
+// so the same enabled profiles are valid on both Windows and Linux runners.
+const testPaths = {
+  processing: join(tmpdir(), 'epub-ai-config-tests', 'processing'),
+  images: join(tmpdir(), 'epub-ai-config-tests', 'images'),
+  checker: join(tmpdir(), 'epub-ai-config-tests', 'tools', 'checker.jar'),
+};
 
 describe('Environment boundary', () => {
   it('admits only a dedicated HTTPS deterministic loopback beta and rejects accidental paid or public-listener configuration', () => {
@@ -8,8 +18,8 @@ describe('Environment boundary', () => {
       PROCESSING_ENABLED: true,
       PROCESSING_PUBLIC_BETA_ENABLED: true,
       PROCESSING_REPOSITORY: 'local',
-      PROCESSING_DATA_DIR: 'C:/private/epub-test-data',
-      EPUBCHECK_JAR_PATH: 'C:/tools/checker.jar',
+      PROCESSING_DATA_DIR: testPaths.processing,
+      EPUBCHECK_JAR_PATH: testPaths.checker,
       PROCESSING_ALLOWED_ORIGIN: 'https://epub.example.test',
       PROCESSING_UPLOAD_MAX_MIB: 20,
     };
@@ -65,8 +75,8 @@ describe('Environment boundary', () => {
     {
       NODE_ENV: 'production',
       PROCESSING_ENABLED: true,
-      PROCESSING_DATA_DIR: 'C:/private/local-data',
-      EPUBCHECK_JAR_PATH: 'C:/tools/checker.jar',
+      PROCESSING_DATA_DIR: testPaths.processing,
+      EPUBCHECK_JAR_PATH: testPaths.checker,
     },
   ])('rejects invalid configuration without exposing its values', (input) => {
     expect(() => validateEnvironment(input)).toThrow(
@@ -85,8 +95,8 @@ describe('Environment boundary', () => {
       NODE_ENV: 'test',
       PROCESSING_ENABLED: true,
       PROCESSING_AI_ENABLED: true,
-      PROCESSING_DATA_DIR: 'C:/private/epub-test-data',
-      EPUBCHECK_JAR_PATH: 'C:/tools/checker.jar',
+      PROCESSING_DATA_DIR: testPaths.processing,
+      EPUBCHECK_JAR_PATH: testPaths.checker,
       QWEN_ENABLED: true,
       QWEN_API_KEY: 'test-placeholder',
       QWEN_BASE_URL: 'https://example.com/v1',
@@ -96,6 +106,10 @@ describe('Environment boundary', () => {
     expect(() =>
       validateEnvironment({ ...profile, AI_DAILY_BUDGET_MICROS: 1 }),
     ).toThrow('AI_DAILY_BUDGET_MICROS');
+    for (const field of ['PROCESSING_DATA_DIR', 'EPUBCHECK_JAR_PATH'])
+      expect(() =>
+        validateEnvironment({ ...profile, [field]: 'relative-path' }),
+      ).toThrow(field);
   });
 
   it('keeps images independent and validates price, private storage and local use', () => {
@@ -104,7 +118,7 @@ describe('Environment boundary', () => {
       NODE_ENV: 'test',
       IMAGE_GENERATION_ENABLED: true,
       IMAGE_API_KEY: 'test-placeholder',
-      IMAGE_DATA_DIR: 'C:/private/image-test-data',
+      IMAGE_DATA_DIR: testPaths.images,
     };
     expect(validateEnvironment(profile).IMAGE_PRICE_MICROS).toBe(100000);
     expect(() =>
@@ -124,15 +138,15 @@ describe('Environment boundary', () => {
       NODE_ENV: 'test',
       PROCESSING_ENABLED: true,
       PROCESSING_AI_ENABLED: true,
-      PROCESSING_DATA_DIR: 'C:/private/epub-test-data',
-      EPUBCHECK_JAR_PATH: 'C:/tools/checker.jar',
+      PROCESSING_DATA_DIR: testPaths.processing,
+      EPUBCHECK_JAR_PATH: testPaths.checker,
       QWEN_ENABLED: true,
       QWEN_API_KEY: 'test-placeholder',
       QWEN_BASE_URL: 'https://example.com/v1',
       QWEN_MODEL: 'test-model',
       IMAGE_GENERATION_ENABLED: true,
       IMAGE_API_KEY: 'test-placeholder',
-      IMAGE_DATA_DIR: 'C:/private/image-test-data',
+      IMAGE_DATA_DIR: testPaths.images,
       AI_RUN_BUDGET_MICROS: 100,
       AI_DAILY_BUDGET_MICROS: 1,
       IMAGE_OPERATION_BUDGET_MICROS: 1,

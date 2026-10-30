@@ -14,12 +14,15 @@ import { ConversionService } from './conversion.service.js';
 import { ConversionWorkerService } from './conversion-worker.service.js';
 import { ConversionController } from './conversion.controller.js';
 import { BetaMaintenanceService } from './beta-maintenance.service.js';
+import { FeedbackService } from './feedback.service.js';
+import { FeedbackController } from './feedback.controller.js';
 
 @Module({
   imports: [ProcessingModule, AiModule],
   providers: [
     LocalArtifactStorage,
     BetaMaintenanceService,
+    FeedbackService,
     BusinessAccessGuard,
     BusinessService,
     BusinessProcessingHandler,
@@ -33,6 +36,7 @@ import { BetaMaintenanceService } from './beta-maintenance.service.js';
     ProcessingModule,
     LocalArtifactStorage,
     BusinessService,
+    FeedbackService,
     BusinessAccessGuard,
     BusinessProcessingHandler,
     IllustrationService,
@@ -45,6 +49,7 @@ export class BusinessCoreModule {}
   imports: [BusinessCoreModule],
   controllers: [
     BusinessController,
+    FeedbackController,
     IllustrationController,
     ConversionController,
   ],

@@ -1,5 +1,6 @@
 # Backend development
 
+- Git workflow: create a new branch for each task, push that branch and open a pull request targeting `main`. Never commit or push directly to `main`, force-push it, or merge a pull request without the user's instruction.
 - Use Node.js >=24.15 and the committed npm lockfile; install with `npm ci`.
 - Keep HTTP controllers small. Put database, queue and model work behind their modules/services.
 - Validate all environment configuration in `src/config/environment.ts`; default external services are disabled. Never commit `.env`, credentials, book uploads or generated clients.

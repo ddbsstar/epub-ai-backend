@@ -10,4 +10,6 @@ The design includes relative heading hierarchy, chapter-opening space, first-par
 
 `summary.typography` optionally reports total/styled/preserved paragraphs, styled headings and role counts. Zero styled content is not described as visual improvement. Engine reports retain per-document skip reasons and exact assignment evidence.
 
+The first English-template extension and its exact real-book coverage are recorded in [English EPUB validation](english-epub-validation.md). It adds a narrowly audited chapter wrapper, declared-language paragraph policy and English report warnings, while preserving unsupported source structures. Device acceptance remains separate.
+
 On 2026-10-29 the private Wang Xiaobo source was independently validated: 39/43 documents styled, 335/342 paragraphs styled, 58 headings, 54 openings, 8 quotes and 29 source notes. Cover/TOC/copyright/image pages stayed protected. All original body bytes, six image bytes, navigation, metadata and reading order were preserved. The live loopback upload/export/download flow finished in approximately 11 seconds for this one 2.3 MB book, with actual EPUBCheck 5.4.0 zero errors/warnings. This is not a throughput or Kindle-device benchmark. No model was called. See the notes workspace `outputs/editorial-typography-1/` for private evidence; no source books belong in this repository.

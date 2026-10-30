@@ -5,6 +5,7 @@ export const typographySummarySchema = z
     profile: z.literal('editorial-1'),
     totalParagraphs: count,
     styledParagraphs: count,
+    styledSeparatorParagraphs: count.optional(),
     preservedParagraphs: count,
     styledHeadings: count,
     roleCounts: z.object({
@@ -23,6 +24,8 @@ export const typographySummarySchema = z
         value.totalParagraphs &&
       Object.entries(value.roleCounts)
         .filter(([role]) => role !== 'separator')
-        .reduce((sum, [, number]) => sum + number, 0) ===
-        value.styledParagraphs,
+        .reduce((sum, [, number]) => sum + number, 0) +
+        (value.styledSeparatorParagraphs ?? 0) ===
+        value.styledParagraphs &&
+      (value.styledSeparatorParagraphs ?? 0) <= value.roleCounts.separator,
   );

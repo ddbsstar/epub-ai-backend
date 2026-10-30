@@ -145,6 +145,12 @@ const runSchema = envelope({
             profile: { type: 'string', enum: ['editorial-1'] },
             totalParagraphs: { type: 'integer', minimum: 0 },
             styledParagraphs: { type: 'integer', minimum: 0 },
+            styledSeparatorParagraphs: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'Styled p elements with the separator role; excluded hr elements are counted only in roleCounts.separator. Missing in historical summaries means zero.',
+            },
             preservedParagraphs: { type: 'integer', minimum: 0 },
             styledHeadings: { type: 'integer', minimum: 0 },
             roleCounts: {
@@ -194,6 +200,28 @@ export class BusinessController {
   @Get('capabilities')
   @ApiOkResponse({
     description: 'Enabled upload/retention limits; no private configuration.',
+    schema: envelope({
+      type: 'object',
+      required: [
+        'typographyOnly',
+        'uploadMaxMiB',
+        'retentionHours',
+        'feedbackAvailable',
+        'feedbackRetentionHours',
+      ],
+      properties: {
+        typographyOnly: { type: 'boolean' },
+        uploadMaxMiB: { type: 'integer', minimum: 1 },
+        retentionHours: { type: 'integer', nullable: true, minimum: 1 },
+        feedbackAvailable: { type: 'boolean' },
+        feedbackRetentionHours: {
+          type: 'integer',
+          nullable: true,
+          minimum: 24,
+          maximum: 24,
+        },
+      },
+    }),
   })
   capabilities() {
     return this.service.capabilities();

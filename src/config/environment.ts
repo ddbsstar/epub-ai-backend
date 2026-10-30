@@ -118,6 +118,7 @@ const schema = z
     ILLUSTRATION_BATCH_BUDGET_MICROS: integer(1, 1000000000).default(1000000),
     PROCESSING_ENABLED: bool.default(false),
     PROCESSING_PUBLIC_BETA_ENABLED: bool.default(false),
+    PROCESSING_FEEDBACK_ENABLED: bool.default(false),
     PROCESSING_BETA_OWNER_BOOK_LIMIT: integer(1, 20).default(5),
     PROCESSING_BETA_MAX_ACTIVE_RUNS: integer(1, 20).default(10),
     PROCESSING_BETA_STORAGE_MAX_MIB: integer(256, 4096).default(1024),
@@ -249,6 +250,16 @@ const schema = z
         required('QUEUE_ENABLED', true);
       }
     }
+    if (
+      env.PROCESSING_FEEDBACK_ENABLED &&
+      (!env.PROCESSING_ENABLED || env.PROCESSING_REPOSITORY !== 'local')
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['PROCESSING_FEEDBACK_ENABLED'],
+        message:
+          'Feedback requires enabled processing with the local private storage adapter',
+      });
     if (env.PROCESSING_PUBLIC_BETA_ENABLED) {
       if (
         env.NODE_ENV !== 'production' ||

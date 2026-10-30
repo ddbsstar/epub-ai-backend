@@ -50,6 +50,7 @@ export interface EpubDocumentReport {
     cssPath: string | null;
     assignments: EditorialAssignment[];
     language?: EditorialDocument['language'];
+    styledSeparatorParagraphs?: number;
   };
 }
 

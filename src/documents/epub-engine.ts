@@ -397,6 +397,7 @@ export async function processEpub(
         profile: 'editorial-1',
         totalParagraphs: 0,
         styledParagraphs: 0,
+        styledSeparatorParagraphs: 0,
         preservedParagraphs: 0,
         styledHeadings: 0,
         roleCounts: emptyEditorialCounts(),
@@ -922,6 +923,9 @@ export async function processEpub(
             edit.value +
             transformed.slice(edit.end);
         typography!.styledParagraphs += editorial.styledParagraphs;
+        typography!.styledSeparatorParagraphs =
+          (typography!.styledSeparatorParagraphs ?? 0) +
+          editorial.styledSeparatorParagraphs;
         typography!.styledHeadings += editorial.styledHeadings;
         for (const role of Object.keys(
           editorial.roleCounts,
@@ -1028,6 +1032,9 @@ export async function processEpub(
                   cssPath: editorialCssPath,
                   assignments: shouldStyle ? editorial.assignments : [],
                   language: editorial.language,
+                  styledSeparatorParagraphs: shouldStyle
+                    ? editorial.styledSeparatorParagraphs
+                    : 0,
                 },
               }
             : {}),

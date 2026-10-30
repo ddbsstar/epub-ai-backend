@@ -22,6 +22,7 @@ export interface EditorialSummary {
   profile: typeof EDITORIAL_PROFILE;
   totalParagraphs: number;
   styledParagraphs: number;
+  styledSeparatorParagraphs?: number;
   preservedParagraphs: number;
   styledHeadings: number;
   roleCounts: Record<EditorialRole, number>;
@@ -39,6 +40,7 @@ export interface EditorialDocument {
   assignments: EditorialAssignment[];
   roleCounts: Record<EditorialRole, number>;
   styledParagraphs: number;
+  styledSeparatorParagraphs: number;
   styledHeadings: number;
   reasons: string[];
   language: {
@@ -276,6 +278,7 @@ export function editorialTypography(
     assignments: [],
     roleCounts: emptyEditorialCounts(),
     styledParagraphs: 0,
+    styledSeparatorParagraphs: 0,
     styledHeadings: 0,
     reasons: [],
     language: languageOf(document, packageLanguages),
@@ -607,6 +610,7 @@ export function editorialTypography(
       );
       result.roleCounts[role]++;
       result.styledParagraphs++;
+      if (role === 'separator') result.styledSeparatorParagraphs++;
       opening = role === 'separator';
     }
   }

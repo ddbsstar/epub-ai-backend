@@ -341,14 +341,16 @@ export class BusinessProcessingHandler {
         warnings.push('未发现适合本轮 AI 判断的安全结构片段，已使用规则排版。');
       if (after.errors)
         warnings.push(
-          `原书已有 ${after.errors} 项格式错误仍保留，本轮未增加新的格式错误。`,
+          `${after.errors} pre-existing source format error(s) remain; this export introduces no new format errors.`,
         );
       if (after.warnings)
         warnings.push(
-          `格式检查报告 ${after.warnings} 项警告，详情见处理报告。`,
+          `The format checker reports ${after.warnings} warning(s); see the processing report for details.`,
         );
       if (summary.styledChapters === 0)
-        warnings.push('本书结构较复杂，本轮保留原样；未强制应用统一样式。');
+        warnings.push(
+          'This book retained its original styles because no documents could be safely restyled.',
+        );
       const reportKey = `${prefix}/validation-report.json`;
       await this.storage.storeJson(reportKey, {
         schemaVersion: 1,

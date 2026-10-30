@@ -1,6 +1,7 @@
 import type {
   EditorialAssignment,
   EditorialSummary,
+  EditorialDocument,
 } from '../layout/editorial-typography.js';
 
 export interface EpubLimits {
@@ -48,6 +49,8 @@ export interface EpubDocumentReport {
     profile: 'editorial-1';
     cssPath: string | null;
     assignments: EditorialAssignment[];
+    language?: EditorialDocument['language'];
+    styledSeparatorParagraphs?: number;
   };
 }
 

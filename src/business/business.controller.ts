@@ -145,6 +145,12 @@ const runSchema = envelope({
             profile: { type: 'string', enum: ['editorial-1'] },
             totalParagraphs: { type: 'integer', minimum: 0 },
             styledParagraphs: { type: 'integer', minimum: 0 },
+            styledSeparatorParagraphs: {
+              type: 'integer',
+              minimum: 0,
+              description:
+                'Styled p elements with the separator role; excluded hr elements are counted only in roleCounts.separator. Missing in historical summaries means zero.',
+            },
             preservedParagraphs: { type: 'integer', minimum: 0 },
             styledHeadings: { type: 'integer', minimum: 0 },
             roleCounts: {

@@ -70,7 +70,11 @@ async function appForBusiness(ai = false, budgetMicros = 50000, beta = false) {
   return { app, root, agent: request.agent(app.getHttpServer()) };
 }
 
-async function makeBook(root: string, brokenReference = false) {
+async function makeBook(
+  root: string,
+  brokenReference = false,
+  englishBody?: string,
+) {
   const file = join(root, `${randomUUID()}.epub`);
   const zip = new yazl.ZipFile();
   const written = pipeline(zip.outputStream, createWriteStream(file));
@@ -84,6 +88,11 @@ async function makeBook(root: string, brokenReference = false) {
     'text/nav.xhtml':
       '<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><head><title>目录</title></head><body><nav epub:type="toc"><ol><li><a href="chapter.xhtml#chapter">第一章</a></li></ol></nav></body></html>',
   };
+  if (englishBody) {
+    entries['text/chapter.xhtml'] =
+      `<html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><title>Original English regression</title></head>${englishBody}</html>`;
+    entries['text/book.opf'] = entries['text/book.opf'].replace('zh-CN', 'en');
+  }
   for (const [name, value] of Object.entries(entries))
     zip.addBuffer(Buffer.from(value), name, { compress: name !== 'mimetype' });
   zip.end();
@@ -306,6 +315,81 @@ describe('local EPUB business HTTP boundary', () => {
         summary: { typography: { profile: 'editorial-1' } },
       });
       expect(model).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('publishes an English book with paragraph and hr separators through the real process, validation and publish handler', async () => {
+    const { app, root, agent } = await appForBusiness();
+    try {
+      const retainedError = {
+        ...cleanCheck,
+        errors: 1,
+        errorSignatures: ['unchanged-source-format-issue'],
+      };
+      vi.spyOn(app.get(EpubCheckService), 'check').mockResolvedValue(
+        retainedError,
+      );
+      const source =
+        '<body class="x-ebookmaker x-ebookmaker-2"><div class="chapter"><h2 id="chapter">Chapter I</h2><p>First original paragraph.</p><p class="asterism">* * *<br/>* *</p><p>A new scene.</p><hr/><p>After a rule.</p></div></body>';
+      const uploaded = await agent
+        .post('/api/v1/uploads')
+        .attach('file', await makeBook(root, false, source))
+        .expect(201);
+      const created = await agent
+        .post(`/api/v1/books/${uploaded.body.data.bookId}/exports`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ theme: 'reader-editorial' })
+        .expect(202);
+      const repository = app.get(ProcessingRepository);
+      const handler = app.get(BusinessProcessingHandler);
+      for (const stage of ['process', 'validate', 'publish']) {
+        const claimed = (await repository.claim(
+          (await repository.listDispatchable())[0]!,
+          'english-separator-test',
+        ))!;
+        expect(claimed.step.stage).toBe(stage);
+        const result = await handler.handle({
+          ...claimed,
+          signal: new AbortController().signal,
+        });
+        expect(
+          await repository.completeStep(claimed.lease, result.result, {
+            artifacts: result.artifacts,
+          }),
+        ).toBe(true);
+      }
+      const done = await agent
+        .get(`/api/v1/runs/${created.body.data.id}`)
+        .expect(200);
+      expect(done.body.data.status).toBe('SUCCEEDED');
+      expect(done.body.data.summary).toMatchObject({
+        formatErrors: 1,
+        typography: {
+          totalParagraphs: 4,
+          styledParagraphs: 4,
+          preservedParagraphs: 0,
+          styledSeparatorParagraphs: 1,
+          roleCounts: { opening: 3, body: 0, separator: 2 },
+        },
+      });
+      expect(done.body.data.warnings).toContain(
+        '1 pre-existing source format error(s) remain; this export introduces no new format errors.',
+      );
+      const downloaded = await agent
+        .get(String(done.body.data.artifacts.report))
+        .expect(200);
+      const report =
+        typeof downloaded.body?.summary === 'object'
+          ? downloaded.body
+          : JSON.parse(downloaded.text);
+      expect(report.summary.typography.styledSeparatorParagraphs).toBe(1);
+      expect(
+        report.engine.documents[0].editorial.styledSeparatorParagraphs,
+      ).toBe(1);
+      expect(report.engine.typography.roleCounts.separator).toBe(2);
+      await agent.get(String(done.body.data.artifacts.epub)).expect(200);
     } finally {
       await app.close();
     }

@@ -524,6 +524,12 @@ export async function processEpub(
         )
         ?.text.trim()
         .slice(0, 200) || null;
+    const packageLanguages = packageDocument.elements
+      .filter(
+        (element) =>
+          element.parent === metadata && element.local === 'language',
+      )
+      .map((element) => element.text);
     const items: ManifestItem[] = packageDocument.elements
       .filter(
         (element) =>
@@ -615,7 +621,7 @@ export async function processEpub(
       await writeResource(path, repair.css);
       warn(
         'UNUSED_FONT_PLACEHOLDER_REMOVED',
-        '移除未使用的缺失字体占位声明，原书文件未修改',
+        'Removed an unused missing-font placeholder; the source book was not modified.',
         path,
       );
     }
@@ -650,7 +656,7 @@ export async function processEpub(
       if (decoded.commentsNormalized)
         warn(
           'CSS_COMMENT_ENCODING_NORMALIZED',
-          '旧样式注释编码不规范，排版副本仅移除注释，原样式资源保留',
+          'Removed non-UTF-8 comments from the working stylesheet; the original stylesheet asset is preserved.',
           item.path,
         );
       const result = prepareReaderCss(decoded.source);
@@ -753,7 +759,7 @@ export async function processEpub(
           await writeResource(item.path, repaired);
           warn(
             'NCX_METADATA_REPAIRED',
-            '修复目录唯一标识和顺序编号，目录目标与顺序保持不变',
+            'Repaired the NCX identifier and sequence numbers; navigation targets and order are unchanged.',
             item.path,
           );
         }
@@ -865,6 +871,7 @@ export async function processEpub(
                       ).source,
                   ),
               ),
+              packageLanguages,
             )
           : undefined;
       if (editorial) {
@@ -994,7 +1001,7 @@ export async function processEpub(
       if (fixedDoctype !== transformed)
         warn(
           'DOCTYPE_REPAIRED',
-          '更新 XHTML 声明，正文内容保持不变',
+          'Updated the XHTML declaration; original body bytes are unchanged.',
           item.path,
         );
       transformed = fixedDoctype;
@@ -1020,6 +1027,7 @@ export async function processEpub(
                   profile: 'editorial-1' as const,
                   cssPath: editorialCssPath,
                   assignments: shouldStyle ? editorial.assignments : [],
+                  language: editorial.language,
                 },
               }
             : {}),
@@ -1027,16 +1035,17 @@ export async function processEpub(
         if (!shouldStyle)
           warn(
             'CHAPTER_PRESERVED',
-            '保留本章原样式，避免修改复杂结构或缺少明确语义的内容',
+            "Kept this document's original styles because its structure or typography could not be safely restyled.",
             item.path,
           );
         if (
           shouldStyle &&
+          !editorial &&
           paragraphElements.some((element) => element.attrs.class)
         )
           warn(
             'SPECIAL_PARAGRAPH_PRESERVED',
-            '保留带专用样式的特殊段落',
+            'Kept dedicated publisher styling for special paragraphs.',
             item.path,
           );
       }
@@ -1056,7 +1065,7 @@ export async function processEpub(
     if (packageEdits.length > 0)
       warn(
         'OPF_EPUB2_COVER_PROPERTY_REPAIRED',
-        '移除 EPUB 2 封面条目上冗余的 EPUB 3 属性，保留原有封面元数据',
+        'Removed a redundant EPUB 3 property from an EPUB 2 cover item; original cover metadata is preserved.',
         packagePath,
       );
     if (newManifest.length > 0) {
@@ -1230,9 +1239,13 @@ export async function processEpub(
         } else
           warn(
             'COVER_UNAVAILABLE',
-            '封面不是首版支持的安全 JPEG/PNG，未生成网页封面',
+            'The cover is not a supported JPEG or PNG; no web cover preview was created.',
           );
-      } else warn('COVER_UNAVAILABLE', '封面文件较大，未生成网页封面');
+      } else
+        warn(
+          'COVER_UNAVAILABLE',
+          'The cover exceeds the web preview size limit; no web cover preview was created.',
+        );
     }
     await writeFile(reportPath, JSON.stringify(report, null, 2) + '\n', {
       flag: 'wx',

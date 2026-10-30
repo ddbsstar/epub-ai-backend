@@ -41,6 +41,11 @@ export interface EditorialDocument {
   styledParagraphs: number;
   styledHeadings: number;
   reasons: string[];
+  language: {
+    policy: 'english-prose' | 'chinese-prose' | 'neutral-prose' | 'conflict';
+    package: string[];
+    document: string[];
+  };
 }
 const plainInline = new Set([
   'span',
@@ -75,6 +80,10 @@ function simpleMatches(
   selector: string,
   element: XmlElement,
 ): boolean | undefined {
+  // This one existence selector is used by the audited Gutenberg template.
+  // Other attribute selectors remain unproved rather than being approximated.
+  if (/^a\[href\]$/iu.test(selector.trim()))
+    return element.local === 'a' && 'href' in element.attrs;
   const match = selector
     .trim()
     .match(
@@ -142,6 +151,8 @@ function roleOf(
 } {
   const names = classes(element);
   const semantic = `${element.attrs['epub:type'] ?? ''} ${element.attrs.role ?? ''}`;
+  if (names.includes('asterism'))
+    return { role: 'separator', source: 'publisher-class-and-separator-text' };
   if (inQuote || names.some((name) => /^(?:quote|kindle-cn-ref)$/iu.test(name)))
     return {
       role: 'quote',
@@ -175,7 +186,7 @@ function roleOf(
   )
     ? 'right'
     : names.some((name) =>
-          /(?:para-(?:align-)?center|text-center)$/iu.test(name),
+          /(?:para-(?:align-)?center|text-center|^center)$/iu.test(name),
         )
       ? 'center'
       : undefined;
@@ -183,8 +194,74 @@ function roleOf(
     role: 'body',
     source: names.length ? 'publisher-prose' : 'paragraph',
     ...(alignment ? { alignment } : {}),
-    noIndent: names.some((name) => /no-indent$/iu.test(name)),
+    noIndent: names.some((name) => /(?:no-indent|^noindent)$/iu.test(name)),
   };
+}
+
+function languageOf(document: XmlDocument, packageLanguages: string[]) {
+  const roots = document.elements.filter((element) =>
+    [
+      'html',
+      'body',
+      'div',
+      'blockquote',
+      'p',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+    ].includes(element.local),
+  );
+  const normalize = (values: string[]) => [
+    ...new Set(
+      values.map((value) => value.trim().toLowerCase()).filter(Boolean),
+    ),
+  ];
+  const declared = normalize(
+    roots.flatMap((element) =>
+      [element.attrs.lang, element.attrs['xml:lang']].filter(
+        (value): value is string => value !== undefined,
+      ),
+    ),
+  );
+  const packaged = normalize(packageLanguages);
+  const all = [...packaged, ...declared];
+  const valid = all.every((value) =>
+    /^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$/u.test(value),
+  );
+  const primary = new Set(all.map((value) => value.split('-')[0]));
+  const policy: EditorialDocument['language']['policy'] =
+    !valid || primary.size > 1
+      ? 'conflict'
+      : primary.has('en')
+        ? 'english-prose'
+        : primary.has('zh')
+          ? 'chinese-prose'
+          : 'neutral-prose';
+  return { policy, package: packaged, document: declared };
+}
+
+function readerOnlyMedia(rule: postcss.AtRule) {
+  return (
+    rule.name.toLowerCase() === 'media' &&
+    rule.params.trim().toLowerCase() === 'screen' &&
+    !!rule.nodes?.length &&
+    rule.nodes.every(
+      (node) =>
+        node.type === 'comment' ||
+        (node.type === 'rule' &&
+          /^(?:body|html)$/iu.test(node.selector.trim()) &&
+          node.nodes.every(
+            (child) =>
+              child.type === 'comment' ||
+              (child.type === 'decl' &&
+                /^(?:margin-left|margin-right)$/iu.test(child.prop) &&
+                /^(?:0|\d+(?:\.\d+)?(?:%|em|rem|px))$/iu.test(child.value)),
+          )),
+    )
+  );
 }
 
 /** Source-bound CSS only; no text, HTML, invented labels or model decisions. */
@@ -192,6 +269,7 @@ export function editorialTypography(
   document: XmlDocument,
   body: XmlElement,
   sheets: string[],
+  packageLanguages: string[] = [],
 ): EditorialDocument {
   const result: EditorialDocument = {
     css: '',
@@ -200,6 +278,7 @@ export function editorialTypography(
     styledParagraphs: 0,
     styledHeadings: 0,
     reasons: [],
+    language: languageOf(document, packageLanguages),
   };
   const elements = document.elements.filter(
     (entry) => entry.start >= body.start && entry.end <= body.end,
@@ -236,20 +315,52 @@ export function editorialTypography(
     }
     parsedSheets.push(root);
   }
-  const children = elements.filter((entry) => entry.parent === body);
+  const bodyChildren = elements.filter((entry) => entry.parent === body);
+  // Admit a single ordinary chapter wrapper, not arbitrary nested layouts.
+  const wrapper =
+    bodyChildren.length === 1 &&
+    bodyChildren[0]!.local === 'div' &&
+    classes(bodyChildren[0]!).length === 1 &&
+    classes(bodyChildren[0]!)[0] === 'chapter'
+      ? bodyChildren[0]
+      : undefined;
+  const container = wrapper ?? body;
+  const children = elements.filter((entry) => entry.parent === container);
   const headings = children.filter((entry) => /^h[1-6]$/u.test(entry.local));
   const paragraphs = elements.filter((entry) => entry.local === 'p');
   const reject = (reason: string) => {
     if (!result.reasons.includes(reason)) result.reasons.push(reason);
   };
+  if (result.language.policy === 'conflict')
+    reject('EDITORIAL_LANGUAGE_CONFLICT');
   if (!headings.length || !paragraphs.length) reject('EDITORIAL_NO_PROSE');
   for (const element of elements) {
     if (element.attrs.style || element.local === 'style')
       reject('EDITORIAL_INLINE_STYLE');
-    if (classes(element).some((name) => !typographyClasses.test(name)))
+    const auditedClass = (name: string) =>
+      typographyClasses.test(name) ||
+      (element === body && /^x-ebookmaker(?:-[23])?$/u.test(name)) ||
+      (element === wrapper && name === 'chapter') ||
+      (element.local === 'p' &&
+        ['noindent', 'center', 'asterism'].includes(name));
+    if (classes(element).some((name) => !auditedClass(name)))
       reject('EDITORIAL_UNKNOWN_CLASS');
+    if (
+      classes(element).includes('asterism') &&
+      (!/^[\s*⁂•·]+$/u.test(element.text) ||
+        !/[*⁂•·]/u.test(element.text) ||
+        element.text.length > 256 ||
+        elements.some(
+          (child) =>
+            child.start > element.start &&
+            child.end <= element.end &&
+            child.local !== 'br',
+        ))
+    )
+      reject('EDITORIAL_UNPROVEN_SEPARATOR');
     if (element === body) continue;
-    const top = element.parent === body;
+    if (element === wrapper) continue;
+    const top = element.parent === container;
     const quote = element.local === 'blockquote' && top;
     const empty =
       element.local === 'div' &&
@@ -260,7 +371,7 @@ export function editorialTypography(
       element.local === 'p' &&
       (top ||
         (element.parent?.local === 'blockquote' &&
-          element.parent.parent === body));
+          element.parent.parent === container));
     const heading = /^h[1-6]$/u.test(element.local) && top;
     if (
       !quote &&
@@ -273,7 +384,7 @@ export function editorialTypography(
       reject('EDITORIAL_COMPLEX_STRUCTURE');
     if (
       plainInline.has(element.local) &&
-      element.parent !== body &&
+      element.parent !== container &&
       !elements.some(
         (parent) =>
           ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(parent.local) &&
@@ -283,13 +394,17 @@ export function editorialTypography(
     )
       reject('EDITORIAL_COMPLEX_STRUCTURE');
   }
-  let outside = document.source.slice(body.openingEnd, body.closingStart);
+  let outside = document.source.slice(
+    container.openingEnd,
+    container.closingStart,
+  );
   for (const child of [...children].reverse())
     outside =
-      outside.slice(0, child.start - body.openingEnd) +
-      outside.slice(child.end - body.openingEnd);
+      outside.slice(0, child.start - container.openingEnd) +
+      outside.slice(child.end - container.openingEnd);
   if (outside.replace(/<!--[\s\S]*?-->/gu, '').trim())
     reject('EDITORIAL_UNSCOPED_TEXT');
+  if (wrapper && body.text.trim()) reject('EDITORIAL_UNSCOPED_TEXT');
   for (const quote of children.filter(
     (entry) => entry.local === 'blockquote',
   )) {
@@ -305,7 +420,10 @@ export function editorialTypography(
   const emphasis = new Map<XmlElement, Map<string, string>>();
   for (const root of parsedSheets) {
     root.walkAtRules((rule) => {
-      if (!['font-face', 'charset'].includes(rule.name.toLowerCase()))
+      if (
+        !['font-face', 'charset'].includes(rule.name.toLowerCase()) &&
+        !readerOnlyMedia(rule)
+      )
         reject('EDITORIAL_COMPLEX_CSS');
     });
     root.walkRules((rule) => {
@@ -377,6 +495,7 @@ export function editorialTypography(
   if (result.reasons.length) return result;
   const css = [
     '/* epub-ai editorial-1: source-bound typography */',
+    `/* paragraph policy: ${result.language.policy} */`,
     'html, body { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }',
     'img { max-width: 100%; height: auto; }',
   ];
@@ -402,7 +521,8 @@ export function editorialTypography(
   let opening = true;
   for (const element of children) {
     if (/^h[1-6]$/u.test(element.local)) {
-      const level = Number(element.local.slice(1));
+      const level =
+        wrapper && element === headings[0] ? 1 : Number(element.local.slice(1));
       const next = children[children.indexOf(element) + 1];
       const chapterLabel =
         level === 1 &&
@@ -425,7 +545,9 @@ export function editorialTypography(
       assign(
         element,
         chapterLabel ? 'chapter-label' : 'heading',
-        'heading-tag',
+        wrapper && element === headings[0]
+          ? 'chapter-container-heading'
+          : 'heading-tag',
         `font-family: inherit; font-size: ${size}; font-weight: ${chapterLabel ? 'normal' : 'bold'}; text-indent: 0; text-align: left; margin: ${level === 1 ? '2.8em' : '1.8em'} 0 ${level === 1 ? '1.35em' : '.8em'}; padding: 0 0 ${level === 1 ? '.7em' : '0'}; ${level === 1 && !chapterLabel ? 'border-bottom: .045em solid; ' : ''}page-break-after: avoid; break-after: avoid;`,
       );
       result.styledHeadings++;
@@ -463,7 +585,7 @@ export function editorialTypography(
       let style =
         'margin-top: .35em; margin-bottom: .35em; orphans: 2; widows: 2; ';
       if (role === 'body')
-        style += `text-indent: ${info.noIndent || info.alignment ? '0' : '2em'}; ${info.alignment ? `text-align: ${info.alignment};` : ''}`;
+        style += `text-indent: ${info.noIndent || info.alignment || result.language.policy === 'neutral-prose' ? '0' : result.language.policy === 'english-prose' ? '1.2em' : '2em'}; ${info.alignment ? `text-align: ${info.alignment};` : ''}`;
       if (role === 'opening')
         style += 'text-indent: 0; margin-top: .6em; margin-bottom: .6em;';
       if (role === 'quote') style += 'text-indent: 0; margin: 1em 5%;';
@@ -475,6 +597,8 @@ export function editorialTypography(
       if (role === 'note')
         style +=
           'text-indent: 0; font-size: .88em; margin-top: .9em; margin-bottom: .9em;';
+      if (role === 'separator')
+        style += 'text-indent: 0; text-align: center; margin: 1.5em 0;';
       assign(
         paragraph,
         role,
@@ -483,7 +607,7 @@ export function editorialTypography(
       );
       result.roleCounts[role]++;
       result.styledParagraphs++;
-      opening = false;
+      opening = role === 'separator';
     }
   }
   for (const [element, styles] of emphasis)

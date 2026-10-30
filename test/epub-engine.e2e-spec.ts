@@ -150,6 +150,45 @@ describe('deterministic EPUB engine', () => {
     }
   });
 
+  it('binds the OPF language and single English chapter wrapper to exported CSS and report evidence', async () => {
+    const prose =
+      '<body class="x-ebookmaker x-ebookmaker-3"><div class="chapter"><h2 id="chapter">Chapter I</h2><p>The opening.</p><p>The following paragraph.</p></div></body>';
+    const entries = fixture({
+      'OEBPS/one.xhtml': chapter.replace(body, prose),
+      'OEBPS/book.css':
+        '@media screen { body {margin-left:10%;margin-right:10%} } div.chapter{margin-top:4em} p{text-indent:1em}',
+    });
+    entries['OEBPS/book.opf'] = (entries['OEBPS/book.opf'] as string).replace(
+      'zh-CN',
+      'en',
+    );
+    const options = await setup(entries);
+    const result = await processEpub({
+      ...options,
+      typographyProfile: 'editorial-1',
+    });
+    expect(result.report.summary.styledDocuments).toBe(1);
+    expect(result.report.documents[0]?.editorial?.language).toEqual({
+      policy: 'english-prose',
+      package: ['en'],
+      document: [],
+    });
+    const output = await outputEntries(result.outputPath, options.root);
+    const parsed = parseXml(output.get('OEBPS/one.xhtml')!);
+    const exportedBody = onlyElement(parsed, 'body');
+    expect(parsed.source.slice(exportedBody.start, exportedBody.end)).toBe(
+      prose,
+    );
+    expect(
+      output.get(result.report.documents[0]!.editorial!.cssPath!)!.toString(),
+    ).toContain('text-indent: 1.2em');
+    expect(
+      result.report.warnings.every(
+        (warning) => !/[\u3400-\u9fff]/u.test(warning.message),
+      ),
+    ).toBe(true);
+  });
+
   it.each([
     ['conditional emphasis', ':lang(ja){font-weight:bold}'],
     ['used positioning', 'p{position:absolute}'],

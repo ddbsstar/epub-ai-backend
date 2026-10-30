@@ -135,6 +135,8 @@ describe('local EPUB business HTTP boundary', () => {
       const capabilities = await publicGet('/api/v1/capabilities').expect(200);
       expect(capabilities.body.data).toEqual({
         typographyOnly: true,
+        feedbackAvailable: false,
+        feedbackRetentionHours: null,
         uploadMaxMiB: 1,
         retentionHours: 24,
       });

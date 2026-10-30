@@ -95,7 +95,7 @@ export class BusinessAccessGuard implements CanActivate {
       throw businessError('INVALID_ORIGIN', 403);
     const path = request.path;
     if (
-      !/^\/api\/v1\/(?:uploads|capabilities|books\/[a-f0-9-]{36}\/exports|runs\/[a-f0-9-]{36}(?:\/cancel)?|artifacts\/[a-f0-9-]{36}\/download)$/.test(
+      !/^\/api\/v1\/(?:uploads|capabilities|feedback|books\/[a-f0-9-]{36}\/exports|runs\/[a-f0-9-]{36}(?:\/cancel)?|artifacts\/[a-f0-9-]{36}\/download)$/.test(
         path,
       )
     )

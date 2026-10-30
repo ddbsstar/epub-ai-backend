@@ -2,6 +2,14 @@ import { ApiException } from '../common/http/api-exception.js';
 import { ProcessingError } from '../processing/processing.types.js';
 
 const messages: Record<string, string> = {
+  FEEDBACK_DISABLED: 'Feedback is not available on this service.',
+  INVALID_FEEDBACK: 'Please check the feedback fields and length limits.',
+  FEEDBACK_OWNER_LIMIT:
+    'This browser session has reached its feedback limit. Try again after earlier feedback expires.',
+  FEEDBACK_CAPACITY_EXCEEDED:
+    'The service has reached its feedback capacity. Please try again later.',
+  FEEDBACK_UNAVAILABLE:
+    'Feedback could not be saved. Please try again later with the same request key.',
   PROCESSING_DISABLED: '书籍处理尚未启用',
   LOCAL_ACCESS_ONLY: '当前书籍处理仅供本机开发使用',
   INVALID_ORIGIN: '请求来源不允许',

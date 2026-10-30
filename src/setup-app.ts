@@ -1,6 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import type { Express } from 'express';
+import { json, type Express } from 'express';
 import helmet from 'helmet';
 import { AppConfig } from './config/app-config.module.js';
 import { createValidationPipe } from './common/http/validation.js';
@@ -14,6 +14,7 @@ export function configureApp(app: NestExpressApplication): void {
   express.set('trust proxy', false);
   app.use(requestIdMiddleware);
   app.use(helmet({ strictTransportSecurity: false }));
+  app.use('/api/v1/feedback', json({ limit: 8192, strict: true }));
   app.useBodyParser('json', { limit: config.get('JSON_BODY_LIMIT_KB') * 1024 });
   app.setGlobalPrefix('api');
   app.useGlobalPipes(createValidationPipe());

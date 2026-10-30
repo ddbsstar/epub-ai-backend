@@ -19,6 +19,7 @@ import type { BusinessRequest } from './business-access.js';
 import { runAiView } from './business-ai-view.js';
 import { typographySummarySchema } from './business-typography.js';
 import { BetaMaintenanceService } from './beta-maintenance.service.js';
+import { FeedbackService } from './feedback.service.js';
 
 const exportInput = z
   .object({
@@ -50,6 +51,7 @@ export class BusinessService {
     private readonly storage: LocalArtifactStorage,
     @Inject(BetaMaintenanceService)
     private readonly beta: BetaMaintenanceService,
+    @Inject(FeedbackService) private readonly feedback: FeedbackService,
   ) {}
 
   async upload(request: BusinessRequest) {
@@ -188,6 +190,8 @@ export class BusinessService {
   capabilities() {
     return {
       typographyOnly: this.config.get('PROCESSING_PUBLIC_BETA_ENABLED'),
+      feedbackAvailable: this.feedback.available(),
+      feedbackRetentionHours: this.feedback.retentionHours(),
       uploadMaxMiB: this.config.get('PROCESSING_UPLOAD_MAX_MIB'),
       retentionHours: this.config.get('PROCESSING_PUBLIC_BETA_ENABLED')
         ? this.config.get('PROCESSING_BETA_RETENTION_HOURS')
